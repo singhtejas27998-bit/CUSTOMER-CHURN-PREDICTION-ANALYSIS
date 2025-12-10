@@ -1,146 +1,149 @@
-"""
-Customer Churn Prediction ML System
-Requirements:
-    pip install pandas numpy scikit-learn joblib xgboost
-"""
+# =============================
+# FINAL CUSTOMER CHURN ANALYSIS CODE
+# =============================
 
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import os
 
 from sklearn.model_selection import train_test_split
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.pipeline import Pipeline
 from sklearn.metrics import (
-    classification_report, confusion_matrix, roc_auc_score
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    roc_auc_score,
+    RocCurveDisplay
 )
-from sklearn.ensemble import RandomForestClassifier
-from xgboost import XGBClassifier
-import joblib
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.linear_model import LogisticRegression
+
+# =============================
+# 1. LOAD DATA
+# =============================
+
+DATA_PATH = r"C:\Users\ks255\Downloads\resume_data_with_churn_alternate.csv"
+
+# Check if file exists
+if not os.path.exists(DATA_PATH):
+    print("❌ ERROR: File not found at path:", DATA_PATH)
+    print("👉 Move your file to this location OR update DATA_PATH.")
+    exit()
+
+print("✅ File Located Successfully!\n")
+
+# Handle both CSV or Excel
+if DATA_PATH.endswith(".csv"):
+    df = pd.read_csv(DATA_PATH)
+else:
+    df = pd.read_excel(DATA_PATH)
+
+print("📌 First 5 rows of data:")
+print(df.head(), "\n")
+
+# =============================
+# 2. PREPARATION
+# =============================
+
+TARGET_COL = "Churn"  # change if target is named differently
+
+if TARGET_COL not in df.columns:
+    print(f"❌ ERROR: Target column '{TARGET_COL}' not found in dataset.")
+    print("👉 Please confirm your churn column name.")
+    exit()
+
+y = df[TARGET_COL]
+X = df.drop(columns=[TARGET_COL])
+
+# Convert yes/no target to numeric
+mapping = {"Yes": 1, "No": 0, "Y": 1, "N": 0, "True": 1, "False": 0}
+y = y.map(mapping).fillna(y)
+
+if not np.issubdtype(y.dtype, np.number):
+    y, unique_classes = pd.factorize(y)
+    print("🔁 Factorized Target Mapping:")
+    for i, cls in enumerate(unique_classes):
+        print(f"{cls} → {i}")
+
+# =============================
+# 3. TRAIN/TEST SPLIT
+# =============================
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+print("\n📊 Train/Test Split Done")
+print("Train size:", X_train.shape[0])
+print("Test size:", X_test.shape[0])
+
+# =============================
+# 4. PREPROCESSING
+# =============================
+
+numeric = X.select_dtypes(include=["int64", "float64"]).columns
+categorical = X.select_dtypes(include=["object", "bool"]).columns
+
+preprocess = ColumnTransformer(
+    transformers=[
+        ("num", Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler())
+        ]), numeric),
+
+        ("cat", Pipeline([
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("onehot", OneHotEncoder(handle_unknown="ignore"))
+        ]), categorical),
+    ]
+)
+
+# =============================
+# 5. MODEL TRAINING
+# =============================
+
+model = LogisticRegression(max_iter=1000, class_weight="balanced")
+
+pipeline = Pipeline([
+    ("preprocess", preprocess),
+    ("model", model)
+])
+
+print("\n⏳ Training the model...")
+pipeline.fit(X_train, y_train)
+print("✅ Training Complete!\n")
+
+# =============================
+# 6. EVALUATION
+# =============================
+
+y_pred = pipeline.predict(X_test)
+y_proba = pipeline.predict_proba(X_test)[:, 1]
+
+print("📌 Accuracy:", round(accuracy_score(y_test, y_pred), 4))
+print("\n📌 Classification Report:\n", classification_report(y_test, y_pred))
+print("📌 Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+print("📌 ROC-AUC Score:", round(roc_auc_score(y_test, y_proba), 4))
+
+# =============================
+# 7. ROC CURVE
+# =============================
+
+RocCurveDisplay.from_predictions(y_test, y_proba)
+plt.title("ROC Curve - Customer Churn Prediction")
+plt.show()
+
+# =============================
+# 8. SAMPLE PREDICTION
+# =============================
+
+print("\n🔍 Example Predictions on 5 Test Customers:")
+sample = X_test.iloc[:5]
+sample_pred = pipeline.predict(sample)
+print("Predicted churn:", sample_pred)
 
 
-def load_data(csv_path, target_col="churn"):
-    df = pd.read_csv(csv_path)
 
-    if target_col not in df.columns:
-        raise ValueError(f"Target column '{target_col}' not found")
-
-    X = df.drop(columns=[target_col])
-    y = df[target_col]
-    return X, y
-
-
-def build_pipeline(X, model_type="xgboost"):
-    numeric_features = X.select_dtypes(include=[np.number]).columns.tolist()
-    categorical_features = X.select_dtypes(exclude=[np.number]).columns.tolist()
-
-    numeric_transformer = StandardScaler()
-    categorical_transformer = OneHotEncoder(handle_unknown="ignore")
-
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("num", numeric_transformer, numeric_features),
-            ("cat", categorical_transformer, categorical_features),
-        ]
-    )
-
-    if model_type == "xgboost":
-        model = XGBClassifier(
-            n_estimators=300,
-            learning_rate=0.05,
-            max_depth=6,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            eval_metric="logloss",
-            random_state=42,
-            scale_pos_weight=1.5  # to balance churn imbalance
-        )
-    else:
-        model = RandomForestClassifier(
-            n_estimators=300,
-            class_weight="balanced",
-            random_state=42,
-            n_jobs=-1
-        )
-
-    clf = Pipeline(
-        steps=[("preprocessor", preprocessor),
-               ("classifier", model)]
-    )
-    return clf
-
-
-def train_model(csv_path, target_col="churn", test_size=0.2, model_path="churn_model.joblib"):
-    X, y = load_data(csv_path, target_col)
-
-    print("\nDataset Info\n------------------")
-    print("Shape:", X.shape)
-    print("Churn distribution:\n", y.value_counts(normalize=True))
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, stratify=y, random_state=42
-    )
-
-    clf = build_pipeline(X, model_type="xgboost")
-
-    print("\nTraining model...")
-    clf.fit(X_train, y_train)
-
-    print("\nEvaluating model...")
-    y_pred = clf.predict(X_test)
-
-    # Probability score for ROC
-    y_prob = clf.predict_proba(X_test)[:, 1]
-    roc_auc = roc_auc_score(y_test, y_prob)
-
-    print("\nROC-AUC:", roc_auc)
-    print("\nConfusion Matrix:\n", confusion_matrix(y_test, y_pred))
-    print("\nClassification Report:\n", classification_report(y_test, y_pred, digits=4))
-
-    joblib.dump(clf, model_path)
-    print(f"\nModel saved to: {model_path}")
-
-    return clf
-
-
-def load_trained_model(model_path="churn_model.joblib"):
-    return joblib.load(model_path)
-
-
-def predict_single_customer(model, data_dict: dict):
-    # data_dict example:
-    # {
-    #   "tenure": 5,
-    #   "monthly_charges": 75,
-    #   "contract": "Month-to-month",
-    #   "payment_method": "Credit card",
-    #   ...
-    # }
-
-    X_new = pd.DataFrame([data_dict])
-    pred = model.predict(X_new)[0]
-    prob = model.predict_proba(X_new)[0, 1]
-
-    return int(pred), float(prob)
-
-
-if __name__ == "__main__":
-    csv_path = "customer_churn.csv"  # Replace with your dataset
-    target = "churn"
-
-    model = train_model(csv_path, target_col=target)
-
-    # Example prediction
-    sample_customer = {
-        "tenure": 3,
-        "monthly_charges": 85.5,
-        "contract": "Month-to-month",
-        "payment_method": "Credit card",
-        "internet_service": "Fiber optic",
-        "tech_support": "No",
-    }
-
-    label, probability = predict_single_customer(model, sample_customer)
-    print("\n🧾 Prediction Example")
-    print("Will churn (0=no, 1=yes):", label)
-    print("Churn probability:", probability)
