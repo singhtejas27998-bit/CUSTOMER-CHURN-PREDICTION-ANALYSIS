@@ -29,11 +29,11 @@ DATA_PATH = r"C:\Users\ks255\Downloads\resume_data_with_churn_alternate.csv"
 
 # Check if file exists
 if not os.path.exists(DATA_PATH):
-    print("❌ ERROR: File not found at path:", DATA_PATH)
-    print("👉 Move your file to this location OR update DATA_PATH.")
+    print(" ERROR: File not found at path:", DATA_PATH)
+    print(" Move your file to this location OR update DATA_PATH.")
     exit()
 
-print("✅ File Located Successfully!\n")
+print(" File Located Successfully!\n")
 
 # Handle both CSV or Excel
 if DATA_PATH.endswith(".csv"):
@@ -41,7 +41,7 @@ if DATA_PATH.endswith(".csv"):
 else:
     df = pd.read_excel(DATA_PATH)
 
-print("📌 First 5 rows of data:")
+print(" First 5 rows of data:")
 print(df.head(), "\n")
 
 # =============================
@@ -51,8 +51,8 @@ print(df.head(), "\n")
 TARGET_COL = "Churn"  # change if target is named differently
 
 if TARGET_COL not in df.columns:
-    print(f"❌ ERROR: Target column '{TARGET_COL}' not found in dataset.")
-    print("👉 Please confirm your churn column name.")
+    print(f" ERROR: Target column '{TARGET_COL}' not found in dataset.")
+    print(" Please confirm your churn column name.")
     exit()
 
 y = df[TARGET_COL]
@@ -64,7 +64,7 @@ y = y.map(mapping).fillna(y)
 
 if not np.issubdtype(y.dtype, np.number):
     y, unique_classes = pd.factorize(y)
-    print("🔁 Factorized Target Mapping:")
+    print(" Factorized Target Mapping:")
     for i, cls in enumerate(unique_classes):
         print(f"{cls} → {i}")
 
@@ -76,7 +76,7 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y
 )
 
-print("\n📊 Train/Test Split Done")
+print("\n Train/Test Split Done")
 print("Train size:", X_train.shape[0])
 print("Test size:", X_test.shape[0])
 
@@ -114,7 +114,7 @@ pipeline = Pipeline([
 
 print("\n⏳ Training the model...")
 pipeline.fit(X_train, y_train)
-print("✅ Training Complete!\n")
+print(" Training Complete!\n")
 
 # =============================
 # 6. EVALUATION
@@ -123,10 +123,10 @@ print("✅ Training Complete!\n")
 y_pred = pipeline.predict(X_test)
 y_proba = pipeline.predict_proba(X_test)[:, 1]
 
-print("📌 Accuracy:", round(accuracy_score(y_test, y_pred), 4))
-print("\n📌 Classification Report:\n", classification_report(y_test, y_pred))
-print("📌 Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
-print("📌 ROC-AUC Score:", round(roc_auc_score(y_test, y_proba), 4))
+print(" Accuracy:", round(accuracy_score(y_test, y_pred), 4))
+print("\n Classification Report:\n", classification_report(y_test, y_pred))
+print(" Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+print(" ROC-AUC Score:", round(roc_auc_score(y_test, y_proba), 4))
 
 # =============================
 # 7. ROC CURVE
@@ -140,7 +140,7 @@ plt.show()
 # 8. SAMPLE PREDICTION
 # =============================
 
-print("\n🔍 Example Predictions on 5 Test Customers:")
+print("\n Example Predictions on 5 Test Customers:")
 sample = X_test.iloc[:5]
 sample_pred = pipeline.predict(sample)
 print("Predicted churn:", sample_pred)
